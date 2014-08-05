@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -29,12 +30,13 @@ func init() {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	var mqs []MQRunner
 	//mqs = append(mqs, new(IronRunner), new(RabbitRunner))
 	mqs = append(mqs, new(IronRunner))
 
 	// 10000 messages, 1 at a time, in 10 threads, on 1 queue
-	prodAndConsume(mqs, 100000, 1, 1000, 1)
+	prodAndConsume(mqs, 10000000, 1, 10, 10)
 }
 
 func prodThenConsume(mqs []MQRunner, messages, atATime, threadperQ, queues int) {
