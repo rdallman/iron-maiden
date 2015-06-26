@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rcrowley/go-metrics"
 )
 
 type MQRunner interface {
@@ -17,6 +21,8 @@ type MQRunner interface {
 	// Consumer defines a runner that gets x messages from
 	// queue called name.
 	Consume(name string, messages int)
+
+	setupQueues(queues []string)
 }
 
 func init() {
@@ -29,39 +35,50 @@ func init() {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	var mqs []MQRunner
 	//mqs = append(mqs, new(IronRunner), new(RabbitRunner))
 	mqs = append(mqs, new(IronRunner))
 
-	// 10000 messages, 1 at a time, in 10 threads, on 1 queue
-	prodAndConsume(mqs, 100000, 1, 1000, 1)
+	var args []int
+	for _, v := range os.Args[1:] {
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			log.Fatalf("couldnt parse string")
+		}
+		args = append(args, i)
+	}
+	prodAndConsume(mqs, args[0], args[1], args[2], args[3], args[4])
+	metrics.WriteOnce(metrics.DefaultRegistry, os.Stdout)
 }
 
-func prodThenConsume(mqs []MQRunner, messages, atATime, threadperQ, queues int) {
+func prodThenConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes int) {
 	qnames := qnames(queues)
 	for _, mq := range mqs {
-		fmt.Println(mq.Name()+":", "benchmark with", messages, "message(s),",
-			atATime, "at a time, across", queues, "queue(s)")
+		fmt.Println(mq.Name()+":", "concurrency benchmark with", messages, "message(s),",
+			atATime, "at a time, across", queues, "queue(s) using ", bytes, "bytes")
 
-		dur := produce(mq, messages, atATime, threadperQ, qnames)
+		mq.setupQueues(qnames)
+		dur := produce(mq, messages, atATime, threadperQ, qnames, bytes)
 		fmt.Println("producer took", dur)
 		dur = consume(mq, messages, atATime, threadperQ, qnames)
 		fmt.Println("consumer took", dur)
 	}
 }
 
-func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues int) {
+func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes int) {
 	qnames := qnames(queues)
 	for _, mq := range mqs {
 		fmt.Println(mq.Name()+":", "concurrency benchmark with", messages, "message(s),",
-			atATime, "at a time, across", queues, "queue(s)")
+			atATime, "at a time, across", queues, "queue(s) using ", bytes, "bytes")
 
+		mq.setupQueues(qnames)
 		var wait sync.WaitGroup
 		wait.Add(2)
 		then := time.Now()
 		go func() {
 			defer wait.Done()
-			produce(mq, messages, atATime, threadperQ, qnames)
+			produce(mq, messages, atATime, threadperQ, qnames, bytes)
 		}()
 		go func() {
 			defer wait.Done()
@@ -73,7 +90,10 @@ func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues int) {
 }
 
 // for each queue specified, produce x messages y at a time
-func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string) time.Duration {
+func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string, bytes int) time.Duration {
+	timer := metrics.GetOrRegisterTimer("producer", metrics.DefaultRegistry)
+	payload := rand_str(bytes)
+
 	var wait sync.WaitGroup
 	wait.Add(len(qnames))
 	then := time.Now()
@@ -85,8 +105,9 @@ func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string) ti
 			for i := 0; i < threadperQ; i++ {
 				go func() {
 					for j := 0; j < messages/atATime/threadperQ; j++ {
-						mq.Produce(name, "con ipsum dolor sit amet shank ground round ribeye t-bone, biltong fatback frankfurter bresaola spare ribs cow turducken landjaeger turkey andouille swine. Ribeye pork venison ball tip pork belly leberkas doner beef beef ribs pig fatback. Filet mignon pork chop corned beef tri-tip boudin strip steak shank spare ribs pork belly ground round shankle short ribs. Tri-tip kielbasa cow tail tongue, turducken jowl doner bacon brisket venison swine. Ribeye chicken pancetta, venison biltong chuck ground round capicola swine andouille. Porchetta pastrami fatback, leberkas capicola drumstick tenderloin meatball frankfurter tail pork tri-tip.",
-							atATime)
+						timer.Time(func() {
+							mq.Produce(name, payload, atATime)
+						})
 					}
 					waiter.Done()
 				}()
@@ -100,6 +121,7 @@ func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string) ti
 
 // for each queue specified, consume x messages y at a time
 func consume(mq MQRunner, messages, atATime, threadperQ int, qnames []string) time.Duration {
+	timer := metrics.GetOrRegisterTimer("consumer", metrics.DefaultRegistry)
 	var wait sync.WaitGroup
 	wait.Add(len(qnames))
 	then := time.Now()
@@ -111,7 +133,9 @@ func consume(mq MQRunner, messages, atATime, threadperQ int, qnames []string) ti
 			for i := 0; i < threadperQ; i++ {
 				go func() {
 					for j := 0; j < messages/atATime/threadperQ; j++ {
-						mq.Consume(name, atATime)
+						timer.Time(func() {
+							mq.Consume(name, atATime)
+						})
 					}
 					waiter.Done()
 				}()
