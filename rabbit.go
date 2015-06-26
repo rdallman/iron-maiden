@@ -1,24 +1,24 @@
 package main
 
 import (
-	"log"
-
 	"github.com/streadway/amqp"
+	"log"
 )
 
-// Code mostly stolen from package `github.com/streadway/amqp/examples`
+var (
+	amqpURI      = "amqp://guest:guest@localhost:5672/"
+	exchangeType = "fanout"
+	key          = "test-key"
+)
 
 type RabbitRunner struct{}
 
 func (rr *RabbitRunner) Name() string { return "RabbitMQ" }
 
-// name is the name of the queue, but for rabbit since we're using AMQP:
-// "Most other broker clients publish to queues, but in AMQP, clients publish Exchanges instead."
+func (rr *RabbitRunner) setupQueues(names []string) {}
+
 func (rr *RabbitRunner) Produce(name, body string, messages int) {
-	amqpURI := "amqp://guest:guest@localhost:5672/"
 	exchange := name
-	exchangeType := "fanout"
-	key := "test-key"
 	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
 		log.Printf("Dial: %s", err)
@@ -101,10 +101,7 @@ func (rr *RabbitRunner) Produce(name, body string, messages int) {
 }
 
 func (rr *RabbitRunner) Consume(name string, messages int) {
-	amqpURI := "amqp://guest:guest@localhost:5672/"
 	exchange := name
-	exchangeType := "fanout"
-	key := "test-key"
 
 	conn, err := amqp.Dial(amqpURI)
 	if err != nil {
