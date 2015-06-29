@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -27,6 +28,8 @@ type MQRunner interface {
 }
 
 func init() {
+	var config Config
+
 	f, err := os.Create("errorlog")
 	if err != nil {
 		log.Println(err)
@@ -34,14 +37,18 @@ func init() {
 	}
 	log.SetOutput(f)
 
-	config := &Config{
-		Host:     "localhost:8086",
-		Database: "benchmark",
-		Username: "root",
-		Password: "root",
+	cfgFile, err := os.Open("influx.json")
+	if err != nil {
+		fmt.Fprintln(os.Stdout, "error: ", err)
+		return
+	}
+	err = json.NewDecoder(cfgFile).Decode(&config)
+	if err != nil {
+		fmt.Fprintln(os.Stdout, "error:", err)
+		return
 	}
 
-	go Influxdb(metrics.DefaultRegistry, 250*time.Millisecond, config)
+	go Influxdb(metrics.DefaultRegistry, 250*time.Millisecond, &config)
 }
 
 func main() {

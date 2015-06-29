@@ -17,10 +17,10 @@ const (
 // Most the code copied from here
 // https://github.com/rcrowley/go-metrics/blob/master/influxdb/influxdb.go
 type Config struct {
-	Host     string
-	Database string
-	Username string
-	Password string
+	Host     string `json:host`
+	Database string `json:database`
+	Username string `json:username`
+	Password string `json:password`
 }
 
 func Influxdb(r metrics.Registry, d time.Duration, config *Config) {

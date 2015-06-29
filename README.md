@@ -23,6 +23,15 @@ Each message body was a 639 character phrase (each was the same 639 chars).
 ### Configs
 
 To run the IronMQ tests a valid iron.json file will be needed.
+Influxdb info should be put in a influx.json file, with the following format
+```
+{
+  "host":"",
+  "database":"",
+  "username:"",
+  "password":""
+}
+```
 For the RabbitMQ tests, the url was hot configured on the server which it was
 run on. Yes, I feel bad.
 
@@ -77,5 +86,6 @@ consumer took 31.769851235s
 ```
 
 ## InfluxDB
+Currently using v0.8
 
 All times written to influx are in nanoseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}"
