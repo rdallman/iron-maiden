@@ -78,4 +78,4 @@ consumer took 31.769851235s
 
 ## InfluxDB
 
-All times written to influx are in milliseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}"
+All times written to influx are in nanoseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}"
