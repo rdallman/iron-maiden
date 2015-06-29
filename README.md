@@ -10,21 +10,30 @@ Both servers databases were cleared before each benchmark.
 Tests were run on an AWS m1.small box in the same data center.
 
 Tests were all run using the code in this repository, see "runner.go" for a good
-idea on how each was run. 
+idea on how each was run.
 
 RabbitMQ messages were left in transient mode for the tests released, however,
 performance degrades significantly when persistence is turned on. IronMQ
 defaults to persistent messages (with no transient option) and still outperforms RabbitMQ
 in transient mode. One test below shows the performance of RabbitMQ with
-persistence turned on, but we tried to play nice. 
+persistence turned on, but we tried to play nice.
 
 Each message body was a 639 character phrase (each was the same 639 chars).
 
 ### Configs
 
-To run the IronMQ tests a valid iron.json file will be needed. 
+To run the IronMQ tests a valid iron.json file will be needed.
+Influxdb info should be put in a influx.json file, with the following format
+```
+{
+  "host":"",
+  "database":"",
+  "username:"",
+  "password":""
+}
+```
 For the RabbitMQ tests, the url was hot configured on the server which it was
-run on. Yes, I feel bad. 
+run on. Yes, I feel bad.
 
 ### Results (run separately)
 
@@ -75,3 +84,8 @@ RabbitMQ: benchmark with 10000 message(s), 1 at a time, across 1 queue(s)
 producer took 2m18.349348198s
 consumer took 31.769851235s
 ```
+
+## InfluxDB
+Currently using v0.8
+
+All times written to influx are in nanoseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}"

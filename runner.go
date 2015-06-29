@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
+var baseName string //This serves as the base for influx
 type MQRunner interface {
 	Name() string
 	// Producer defines a runner that writes x messages with
@@ -26,19 +28,34 @@ type MQRunner interface {
 }
 
 func init() {
+	var config Config
+
 	f, err := os.Create("errorlog")
 	if err != nil {
 		log.Println(err)
 		os.Exit(2)
 	}
 	log.SetOutput(f)
+
+	cfgFile, err := os.Open("influx.json")
+	if err != nil {
+		fmt.Fprintln(os.Stdout, "error: ", err)
+		return
+	}
+	err = json.NewDecoder(cfgFile).Decode(&config)
+	if err != nil {
+		fmt.Fprintln(os.Stdout, "error:", err)
+		return
+	}
+
+	go Influxdb(metrics.DefaultRegistry, 250*time.Millisecond, &config)
 }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	var mqs []MQRunner
 	//mqs = append(mqs, new(IronRunner), new(RabbitRunner))
-	mqs = append(mqs, new(IronRunner))
+	mqs = append(mqs, new(RabbitRunner))
 
 	var args []int
 	for _, v := range os.Args[1:] {
@@ -48,6 +65,9 @@ func main() {
 		}
 		args = append(args, i)
 	}
+
+	// -messages-nQueues-payloadSize
+	baseName = fmt.Sprintf("%d-%d-%d-%d", args[0], args[1], args[3], args[4])
 	prodAndConsume(mqs, args[0], args[1], args[2], args[3], args[4])
 	metrics.WriteOnce(metrics.DefaultRegistry, os.Stdout)
 }
@@ -91,7 +111,9 @@ func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes
 
 // for each queue specified, produce x messages y at a time
 func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string, bytes int) time.Duration {
-	timer := metrics.GetOrRegisterTimer("producer", metrics.DefaultRegistry)
+
+	produceTimerName := fmt.Sprintf("producer-%s-%s", mq.Name(), baseName)
+	timer := metrics.GetOrRegisterTimer(produceTimerName, metrics.DefaultRegistry)
 	payload := rand_str(bytes)
 
 	var wait sync.WaitGroup
@@ -121,7 +143,8 @@ func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string, by
 
 // for each queue specified, consume x messages y at a time
 func consume(mq MQRunner, messages, atATime, threadperQ int, qnames []string) time.Duration {
-	timer := metrics.GetOrRegisterTimer("consumer", metrics.DefaultRegistry)
+	consumeTimerName := fmt.Sprintf("consumer-%s-%s", mq.Name(), baseName)
+	timer := metrics.GetOrRegisterTimer(consumeTimerName, metrics.DefaultRegistry)
 	var wait sync.WaitGroup
 	wait.Add(len(qnames))
 	then := time.Now()
