@@ -1,4 +1,3 @@
-
 ### Info
 
 Both RabbitMQ and IronMQ were run on a AWS m3.2xlarge box with specs:
@@ -19,6 +18,7 @@ in transient mode. One test below shows the performance of RabbitMQ with
 persistence turned on, but we tried to play nice.
 
 Each message body was a 639 character phrase (each was the same 639 chars).
+
 
 ### Configs
 
@@ -86,6 +86,6 @@ consumer took 31.769851235s
 ```
 
 ## InfluxDB
-Currently using v0.8
+Currently using v0.9
 
-All times written to influx are in nanoseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}"
+All times written to influx are in nanoseconds. Everytime a test is run, it creates a new series called "{consumer/produce}-{mq.Name}-{messages}-{atATime}-{nQueues}-{payloadSize}". When using influx for metrics, keep in mind that each number is per request, not per message. So if you're sending 20 messages per request, you message rate would be the current-rate * 20.
