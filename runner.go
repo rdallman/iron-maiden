@@ -15,6 +15,8 @@ import (
 )
 
 var baseName string //This serves as the base for influx
+var args []int
+
 type MQRunner interface {
 	Name() string
 	// Producer defines a runner that writes x messages with
@@ -28,6 +30,7 @@ type MQRunner interface {
 }
 
 func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	var config Config
 
 	f, err := os.Create("errorlog")
@@ -44,7 +47,6 @@ func init() {
 	}
 	err = json.NewDecoder(cfgFile).Decode(&config)
 	if err != nil {
-		fmt.Fprintln(os.Stdout, "error:", err)
 		return
 	}
 
@@ -57,22 +59,24 @@ func main() {
 	//mqs = append(mqs, new(IronRunner), new(RabbitRunner))
 	mqs = append(mqs, new(RabbitRunner))
 
-	var args []int
+	if len(os.Args) < 6 {
+		fmt.Println("usage: ./iron-maiden [message_count] [messages_per_batch] [threads_per_queue] [amount_of_queues] [message_size]")
+		return
+	}
 	for _, v := range os.Args[1:] {
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			log.Fatalf("couldnt parse string")
+			log.Fatalf("couldnt parse string", v)
 		}
 		args = append(args, i)
 	}
 
-	// -messages-nQueues-payloadSize
-	baseName = fmt.Sprintf("%d-%d-%d-%d", args[0], args[1], args[3], args[4])
 	prodAndConsume(mqs, args[0], args[1], args[2], args[3], args[4])
 	metrics.WriteOnce(metrics.DefaultRegistry, os.Stdout)
 }
 
 func prodThenConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes int) {
+	baseName = fmt.Sprintf("%d_%d_%d_%d_ptc", args[0], args[1], args[3], args[4])
 	qnames := qnames(queues)
 	for _, mq := range mqs {
 		fmt.Println(mq.Name()+":", "concurrency benchmark with", messages, "message(s),",
@@ -87,6 +91,7 @@ func prodThenConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, byte
 }
 
 func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes int) {
+	baseName = fmt.Sprintf("%d_%d_%d_%d", args[0], args[1], args[3], args[4])
 	qnames := qnames(queues)
 	for _, mq := range mqs {
 		fmt.Println(mq.Name()+":", "concurrency benchmark with", messages, "message(s),",
@@ -112,7 +117,7 @@ func prodAndConsume(mqs []MQRunner, messages, atATime, threadperQ, queues, bytes
 // for each queue specified, produce x messages y at a time
 func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string, bytes int) time.Duration {
 
-	produceTimerName := fmt.Sprintf("producer-%s-%s", mq.Name(), baseName)
+	produceTimerName := fmt.Sprintf("producer_%s_%s", mq.Name(), baseName)
 	timer := metrics.GetOrRegisterTimer(produceTimerName, metrics.DefaultRegistry)
 	payload := rand_str(bytes)
 
@@ -143,7 +148,7 @@ func produce(mq MQRunner, messages, atATime, threadperQ int, qnames []string, by
 
 // for each queue specified, consume x messages y at a time
 func consume(mq MQRunner, messages, atATime, threadperQ int, qnames []string) time.Duration {
-	consumeTimerName := fmt.Sprintf("consumer-%s-%s", mq.Name(), baseName)
+	consumeTimerName := fmt.Sprintf("consumer_%s_%s", mq.Name(), baseName)
 	timer := metrics.GetOrRegisterTimer(consumeTimerName, metrics.DefaultRegistry)
 	var wait sync.WaitGroup
 	wait.Add(len(qnames))
